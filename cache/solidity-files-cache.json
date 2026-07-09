@@ -1,0 +1,154 @@
+{
+  "_format": "hh-sol-cache-2",
+  "files": {
+    "/home/ervin/Documents/Estudio/Programacion/hackathones/ClearLoop/contracts/AuditLog.sol": {
+      "lastModificationDate": 1783609329176,
+      "contentHash": "3c398fd6e449ac6d9ac0fbe79921627e",
+      "sourceName": "contracts/AuditLog.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "AuditLog"
+      ]
+    },
+    "/home/ervin/Documents/Estudio/Programacion/hackathones/ClearLoop/contracts/interfaces/IClearLoop.sol": {
+      "lastModificationDate": 1783609255128,
+      "contentHash": "47f40accebc6ca889d318451d8099cbc",
+      "sourceName": "contracts/interfaces/IClearLoop.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "IAuditLog",
+        "IObligationRegistry"
+      ]
+    },
+    "/home/ervin/Documents/Estudio/Programacion/hackathones/ClearLoop/contracts/ObligationRegistry.sol": {
+      "lastModificationDate": 1783609282554,
+      "contentHash": "2d7ff6266fd4402b8e7c231d57855845",
+      "sourceName": "contracts/ObligationRegistry.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./interfaces/IClearLoop.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "ObligationRegistry"
+      ]
+    },
+    "/home/ervin/Documents/Estudio/Programacion/hackathones/ClearLoop/contracts/NettingEngine.sol": {
+      "lastModificationDate": 1783609319199,
+      "contentHash": "1fafbe90722888773889d42b60a11a7f",
+      "sourceName": "contracts/NettingEngine.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./interfaces/IClearLoop.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "NettingEngine"
+      ]
+    }
+  }
+}
