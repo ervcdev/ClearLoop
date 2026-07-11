@@ -56,6 +56,10 @@ Ver `scripts/deploy.js` que ya implementa este orden.
 | 10 | Reentrancy guard manual + patrón CEI en `archiveAndNovate()` | Doble capa de protección sin depender de OpenZeppelin |
 | 11 | Defensa en profundidad: validación de overflow en `_validateCycle` | `NettingEngine` no debe confiar ciegamente en datos del registry |
 | 12 | Orden de deploy corregido: Registry → AuditLog → NettingEngine → 2 setters | `NettingEngine` necesita la dirección de `AuditLog` en su constructor |
+| 13 | DAML pasa de "argumento arquitectónico opcional" a "requerido" — se integra contra el Ledger API v2 real del validador devnet del hackathon (`fivenorth.io`), no solo `bin/canton` local | Cambio de alcance del equipo tras la experiencia con Somnia — necesario tenerlo funcionando de verdad, no solo documentado |
+| 14 | El JWT se obtiene vía client_credentials (OAuth2) contra `auth.sandbox.fivenorth.io`, cacheado en memoria con refresh 5 min antes de expirar (vida útil nominal 8h) | Evita pedir un token nuevo en cada llamada; evita que expire a mitad de una demo en vivo |
+| 15 | El `client_secret` vive solo en `.env`, nunca en el repo ni en el frontend | Es una credencial real de infraestructura compartida del hackathon |
+| 16 | Pendiente de confirmar: si el validador es compartido entre equipos con un solo participant node, la demo de "3 empresas" son 3 *parties* en el mismo nodo, no 3 nodos físicos separados — a aclarar en el pitch si aplica | Evita una afirmación incorrecta en el video sobre la topología real |
 
 ## Estado del proyecto
 
@@ -65,10 +69,20 @@ Ver `scripts/deploy.js` que ya implementa este orden.
 - [x] `AuditLog.sol` — registro inmutable de compliance
 - [x] `deploy.js` — orden corregido
 - [x] `fullCycle.test.js` — flujo completo A→B→C→A + 2 casos de revert (3 tests, todos pasando)
+- [x] `daml-spec/Obligation.daml` — templates ObligationProposal, NettingProposal, NettingRecord
+- [x] `scripts/canton/get-token.sh` — obtiene JWT vía client_credentials
+- [x] `scripts/canton/discover.sh` — descubre version, parties, ledger-end
+- [x] `scripts/canton/upload-dar.sh` — sube el DAR compilado al validador
+- [x] `scripts/canton/run-full-cycle.js` — flujo completo contra Ledger API v2 (pendiente de completar con contractIds reales)
+- [ ] `.env` — configurar con CANTON_CLIENT_SECRET real (NUNCA commiteado)
 - [ ] Solver mockeado
 - [ ] Frontend demo
-- [ ] Spec DAML como doc arquitectónico
 
 ## Siguiente paso
 
-Correr `npx hardhat test` y confirmar que los 3 tests de integración pasan en verde antes de tocar frontend.
+1. `cp .env.example .env` y completar CANTON_CLIENT_SECRET
+2. `bash scripts/canton/discover.sh` — pegar salida para ajustar PARTIES en run-full-cycle.js
+3. Correr `daml build` desde `daml-spec/` si no se hizo aún
+4. `bash scripts/canton/upload-dar.sh` — pegar salida para obtener PACKAGE_ID
+5. `node scripts/canton/run-full-cycle.js` — probar primer submitCreate
+6. Con los resultados reales, completar el flujo (Accept, Approve x3, Execute)

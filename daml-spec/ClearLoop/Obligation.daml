@@ -1,0 +1,189 @@
+-- Obligation.daml
+-- Spec DAML para ClearLoop — templates del flujo de netting multilateral.
+
+module ClearLoop.Obligation where
+import DA.List (find, head)
+import DA.List (find)
+
+-- ---------------------------------------------------------------------
+-- ObligationProposal — patrón propose/accept (consentimiento bilateral)
+-- ---------------------------------------------------------------------
+
+template ObligationProposal
+  with
+    creditor      : Party
+    debtor        : Party
+    nettingEngine : Party
+    amount        : Decimal
+    obligationId  : Text
+  where
+    signatory creditor
+    observer debtor, nettingEngine
+
+    ensure amount > 0.0 && creditor /= debtor
+
+    choice ObligationProposal_Accept : ContractId Obligation
+      controller debtor
+      do
+        create Obligation with
+          creditor; debtor; nettingEngine; amount; obligationId
+
+    -- Consuming por default: al ejecutar esto, la propuesta ya se
+    -- archiva sola. No hace falta (ni existe) un "archive" manual acá.
+    choice ObligationProposal_Reject : ()
+      controller debtor
+      do
+        pure ()
+
+-- ---------------------------------------------------------------------
+-- Obligation — bilateral, ambas partes firman. Sin flags mutables:
+-- "settled" = el contrato fue archivado, punto. No hay active: Bool.
+-- ---------------------------------------------------------------------
+
+template Obligation
+  with
+    creditor      : Party
+    debtor        : Party
+    nettingEngine : Party
+    amount        : Decimal
+    obligationId  : Text
+  where
+    signatory creditor, debtor
+    observer nettingEngine
+
+    ensure amount > 0.0
+
+    -- Único mecanismo de liquidación. Consuming: al ejecutarlo, el
+    -- contrato se archiva. nettingEngine puede hacerlo porque
+    -- creditor+debtor (signatarios) ya autorizaron este choice al
+    -- firmar el template — ver ARCHITECTURE.md "Diferencia 2".
+    choice Obligation_MarkSettled : ()
+      controller nettingEngine
+      do
+        pure ()
+
+-- ---------------------------------------------------------------------
+-- NettingProposal — equivalente a NettingEngine.sol
+-- ---------------------------------------------------------------------
+
+template NettingProposal
+  with
+    proposer      : Party
+    nettingEngine : Party
+    participants  : [Party]
+    cycleIds      : [ContractId Obligation]
+    approvedBy    : [Party]
+    totalAmount   : Decimal   -- informativo únicamente, ver nota en Execute
+    regulator     : Party
+  where
+    signatory proposer
+    -- CRÍTICO: participants tiene que ser observer, si no ningún
+    -- participante puede ver el contrato para poder aprobarlo.
+    observer participants, nettingEngine, regulator
+
+    choice NettingProposal_Approve : ContractId NettingProposal
+      with
+        approver : Party
+      controller approver
+      do
+        assertMsg "El firmante debe ser un participante del ciclo"
+          (approver `elem` participants)
+        assertMsg "Este participante ya aprobó"
+          (not (approver `elem` approvedBy))
+        create this with approvedBy = approver :: approvedBy
+
+    -- Co-autorización proposer + nettingEngine — el equivalente Daml
+    -- de onlyNettingEngine (ver ARCHITECTURE.md "Diferencia 2").
+    choice NettingProposal_Execute : ContractId NettingRecord
+      with
+        fiscalHash : Text
+      controller proposer, nettingEngine
+      do
+        assertMsg "Faltan aprobaciones de uno o más participantes"
+          (all (\p -> p `elem` approvedBy) participants)
+
+        obligations <- mapA fetch cycleIds
+
+        let amounts = map (.amount) obligations
+        assertMsg "Los montos del ciclo deben ser exactamente iguales (MVP, Decisión #8)"
+          (all (== head amounts) amounts)
+
+        -- Sigma-Delta=0 con signo por participante — esto es lo que
+        -- se había perdido. Sin esto, "montos iguales" no implica
+        -- que el ciclo balancee de verdad.
+        let netPositions = computeNetPositions obligations
+        assertMsg "El ciclo no balancea (Sigma-Delta != 0)"
+          (all (\(_, delta) -> delta == 0.0) netPositions)
+
+        -- Liquidación vía el choice dedicado (autorizado), NUNCA con
+        -- archive crudo — un archive directo acá fallaría en runtime
+        -- por falta de autoridad de creditor/debtor de cada Obligation.
+        mapA_ (\cid -> exercise cid Obligation_MarkSettled) cycleIds
+
+        -- Decisión #30: el total se re-deriva de las obligaciones
+        -- reales, nunca se confía en el campo que puso el proposer.
+        let totalFromObligations = foldl (\acc o -> acc + o.amount) 0.0 obligations
+
+        create NettingRecord with
+          nettingEngine; regulator
+          totalAmount = totalFromObligations
+          fiscalHash
+
+    choice NettingProposal_Reject : ()
+      with
+        rejecter : Party
+      controller rejecter
+      do
+        assertMsg "Solo un participante puede rechazar"
+          (rejecter `elem` participants)
+        pure ()
+
+-- ---------------------------------------------------------------------
+-- NettingRecord — equivalente a AuditLog.sol: solo datos agregados
+-- ---------------------------------------------------------------------
+
+template NettingRecord
+  with
+    nettingEngine : Party
+    regulator     : Party
+    totalAmount   : Decimal
+    fiscalHash    : Text
+  where
+    signatory nettingEngine
+    observer regulator
+    -- Deliberadamente sin creditor/debtor/obligationIds/timestamp de
+    -- las partes — misma regla dura que AuditLog.sol.
+
+-- ---------------------------------------------------------------------
+-- Helpers — validación de ciclo (equivalente a _validateCycle/_applyDelta
+-- de NettingEngine.sol)
+-- ---------------------------------------------------------------------
+
+addDelta : [(Party, Decimal)] -> Party -> Decimal -> [(Party, Decimal)]
+addDelta acc party delta =
+  case find (\(p, _) -> p == party) acc of
+    Some _ -> map (\(p, d) -> if p == party then (p, d + delta) else (p, d)) acc
+    None   -> acc ++ [(party, delta)]
+
+computeNetPositions : [Obligation] -> [(Party, Decimal)]
+computeNetPositions obligations =
+  foldl
+    (\acc o ->
+      let acc1 = addDelta acc o.creditor o.amount
+      in addDelta acc1 o.debtor (negate o.amount)
+    )
+    []
+    obligations
+
+File:     ./ClearLoop/Obligation.daml
+Hidden:   no
+Range:    121:9-121:14
+Source:   typecheck
+Severity: DsError
+Message: 
+./ClearLoop/Obligation.daml:121:9: error:
+    Variable not in scope:
+      mapA_
+        : (ContractId t0 -> Update r0)
+          -> [ContractId Obligation] -> Update a0
+ERROR: Creation of DAR file failed.

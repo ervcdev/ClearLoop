@@ -1,0 +1,163 @@
+module Test.FullCycle where
+
+import Daml.Script
+import ClearLoop.Obligation
+
+data Parties = Parties with
+  alice: Party
+  bob: Party
+  carol: Party
+  nettingEngine: Party
+  regulator: Party
+
+setupParties: Script Parties
+setupParties = do
+  alice         <- allocateParty "Alice"
+  bob           <- allocateParty "Bob"
+  carol         <- allocateParty "Carol"
+  nettingEngine <- allocateParty "NettingEngine"
+  regulator     <- allocateParty "Regulator"
+  pure Parties with alice; bob; carol; nettingEngine; regulator
+
+createAndAcceptObligation
+  : Party -> Party -> Party -> Decimal -> Text -> Script (ContractId Obligation)
+createAndAcceptObligation creditor debtor nettingEngine amount obligationId = do
+  proposalCid <- submit creditor do
+    createCmd ObligationProposal with
+      creditor; debtor; nettingEngine; amount; obligationId
+  submit debtor do
+    exerciseCmd proposalCid ObligationProposal_Accept
+
+testFullCycle: Script ()
+testFullCycle = do
+  Parties{alice, bob, carol, nettingEngine, regulator} <- setupParties
+
+  obligationAB <- createAndAcceptObligation alice bob nettingEngine 100000.0 "obligation-A-B"
+  obligationBC <- createAndAcceptObligation bob carol nettingEngine 100000.0 "obligation-B-C"
+  obligationCA <- createAndAcceptObligation carol alice nettingEngine 100000.0 "obligation-C-A"
+
+  proposalCid <- submit alice do
+    createCmd NettingProposal with
+      proposer = alice
+      nettingEngine
+      participants = [alice, bob, carol]
+      cycleIds = [obligationAB, obligationBC, obligationCA]
+      approvedBy = []
+      totalAmount = 300000.0
+      regulator
+
+  proposalCid1 <- submit alice do
+    exerciseCmd proposalCid NettingProposal_Approve with approver = alice
+  proposalCid2 <- submit bob do
+    exerciseCmd proposalCid1 NettingProposal_Approve with approver = bob
+  proposalCid3 <- submit carol do
+    exerciseCmd proposalCid2 NettingProposal_Approve with approver = carol
+
+  recordCid <- submitMulti [alice, nettingEngine] [] do
+    exerciseCmd proposalCid3 NettingProposal_Execute with
+      fiscalHash = "0xdeadbeef"
+
+  optAB <- queryContractId alice obligationAB
+  optBC <- queryContractId bob obligationBC
+  optCA <- queryContractId carol obligationCA
+  assertMsg "obligationAB deberia estar archivada tras el settlement" (optAB == None)
+  assertMsg "obligationBC deberia estar archivada tras el settlement" (optBC == None)
+  assertMsg "obligationCA deberia estar archivada tras el settlement" (optCA == None)
+
+  Some record <- queryContractId regulator recordCid
+  assertMsg "totalAmount debe coincidir con la suma de los 3 montos" (record.totalAmount == 300000.0)
+
+  pure ()
+
+testMissingApproval: Script ()
+testMissingApproval = do
+  Parties{alice, bob, carol, nettingEngine, regulator} <- setupParties
+
+  obligationAB <- createAndAcceptObligation alice bob nettingEngine 50000.0 "obligation-A-B-2"
+  obligationBA <- createAndAcceptObligation bob alice nettingEngine 50000.0 "obligation-B-A-2"
+
+  proposalCid <- submit alice do
+    createCmd NettingProposal with
+      proposer = alice
+      nettingEngine
+      participants = [alice, bob]
+      cycleIds = [obligationAB, obligationBA]
+      approvedBy = []
+      totalAmount = 100000.0
+      regulator
+
+  proposalCid1 <- submit alice do
+    exerciseCmd proposalCid NettingProposal_Approve with approver = alice
+
+  submitMultiMustFail [alice, nettingEngine] [] do
+    exerciseCmd proposalCid1 NettingProposal_Execute with
+      fiscalHash = "0xshouldfail"
+
+  pure ()
+
+testAmountMismatch: Script ()
+testAmountMismatch = do
+  Parties{alice, bob, carol, nettingEngine, regulator} <- setupParties
+
+  obligationAB <- createAndAcceptObligation alice bob nettingEngine 100000.0 "obligation-A-B-3"
+  obligationBA <- createAndAcceptObligation bob alice nettingEngine 75000.0 "obligation-B-A-3"
+
+  proposalCid <- submit alice do
+    createCmd NettingProposal with
+      proposer = alice
+      nettingEngine
+      participants = [alice, bob]
+      cycleIds = [obligationAB, obligationBA]
+      approvedBy = []
+      totalAmount = 175000.0
+      regulator
+
+  proposalCid1 <- submit alice do
+    exerciseCmd proposalCid NettingProposal_Approve with approver = alice
+  proposalCid2 <- submit bob do
+    exerciseCmd proposalCid1 NettingProposal_Approve with approver = bob
+
+  submitMultiMustFail [alice, nettingEngine] [] do
+    exerciseCmd proposalCid2 NettingProposal_Execute with
+      fiscalHash = "0xshouldfail"
+
+  pure ()
+
+testDebtorRejectsObligation: Script ()
+testDebtorRejectsObligation = do
+  Parties{alice, bob, nettingEngine} <- setupParties
+
+  proposalCid <- submit alice do
+    createCmd ObligationProposal with
+      creditor = alice
+      debtor = bob
+      nettingEngine
+      amount = 20000.0
+      obligationId = "obligation-rejected"
+
+  submit bob do
+    exerciseCmd proposalCid ObligationProposal_Reject
+
+  pure ()
+
+testUnauthorizedApproverRejected: Script ()
+testUnauthorizedApproverRejected = do
+  Parties{alice, bob, carol, nettingEngine, regulator} <- setupParties
+
+  obligationAB <- createAndAcceptObligation alice bob nettingEngine 30000.0 "obligation-A-B-5"
+  obligationBA <- createAndAcceptObligation bob alice nettingEngine 30000.0 "obligation-B-A-5"
+
+  proposalCid <- submit alice do
+    createCmd NettingProposal with
+      proposer = alice
+      nettingEngine
+      participants = [alice, bob]
+      cycleIds = [obligationAB, obligationBA]
+      approvedBy = []
+      totalAmount = 60000.0
+      regulator
+
+  submitMustFail carol do
+    exerciseCmd proposalCid NettingProposal_Approve with approver = carol
+
+  pure ()
