@@ -76,7 +76,7 @@ export function ObligationGraph({ obligations, role, highlightIds = [] }: Props)
             ? "var(--muted-foreground)"
             : visible
               ? "var(--primary)"
-              : "var(--border)"
+              : "var(--muted-foreground)"
           const marker = visible && !o.settled ? "url(#arrow)" : "url(#arrow-muted)"
 
           return (
@@ -146,7 +146,7 @@ export function ObligationGraph({ obligations, role, highlightIds = [] }: Props)
           <span className="h-0.5 w-4 bg-primary" /> your obligation
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-0.5 w-4 border-t border-dashed border-border" /> opaque commitment
+          <span className="h-0.5 w-4 border-t border-dashed border-muted-foreground" /> opaque commitment
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-0.5 w-4 bg-muted-foreground opacity-40" /> settled

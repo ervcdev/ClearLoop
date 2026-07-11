@@ -42,7 +42,7 @@ export function NettingModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/40 p-0 sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-background/80 p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-label={`Netting proposal #${proposal.id}`}
