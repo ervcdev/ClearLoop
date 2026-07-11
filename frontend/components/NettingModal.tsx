@@ -165,7 +165,7 @@ export function NettingModal({
 
         {/* Actions */}
         <div className="flex flex-col gap-3 p-5">
-          {error && (
+          {error && proposal.status === "Pending" && (
             <p className="rounded-md bg-rejected/10 px-3 py-2 font-mono text-xs text-rejected">
               {error}
             </p>
