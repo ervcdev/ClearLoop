@@ -48,7 +48,36 @@ export function ObligationGraph({ obligations, role, highlightIds = [] }: Props)
           <marker id="arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" style={{ fill: "var(--muted-foreground)" }} />
           </marker>
+          <marker id="arrow-signal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" style={{ fill: "var(--signal)" }} />
+          </marker>
+          <filter id="cl-glow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="4" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
         </defs>
+
+        {/* Backdrop: faint concentric orbits + spokes so the network sits in a space */}
+        <g style={{ stroke: "var(--border)", opacity: 0.5 }} fill="none">
+          <circle cx={CX} cy={CY} r={R} strokeDasharray="2 6" />
+          <circle cx={CX} cy={CY} r={R * 0.55} strokeDasharray="2 6" />
+          {COMPANIES.map((_, i) => {
+            const a = (i / COMPANIES.length) * Math.PI * 2 - Math.PI / 2
+            return (
+              <line
+                key={i}
+                x1={CX}
+                y1={CY}
+                x2={CX + R * Math.cos(a)}
+                y2={CY + R * Math.sin(a)}
+                strokeDasharray="2 6"
+              />
+            )
+          })}
+        </g>
 
         {/* Edges: debtor → creditor (direction money is owed) */}
         {obligations.map((o) => {
@@ -72,19 +101,39 @@ export function ObligationGraph({ obligations, role, highlightIds = [] }: Props)
           const start = trim(from, { x: cxp, y: cyp }, NODE_R)
           const end = trim(to, { x: cxp, y: cyp }, NODE_R)
 
+          const active = inCycle && !o.settled
           const stroke = o.settled
             ? "var(--muted-foreground)"
-            : visible
-              ? "var(--primary)"
-              : "var(--muted-foreground)"
-          const marker = visible && !o.settled ? "url(#arrow)" : "url(#arrow-muted)"
+            : active
+              ? "var(--signal)"
+              : visible
+                ? "var(--primary)"
+                : "var(--muted-foreground)"
+          const marker = o.settled
+            ? "url(#arrow-muted)"
+            : active
+              ? "url(#arrow-signal)"
+              : visible
+                ? "url(#arrow)"
+                : "url(#arrow-muted)"
+          const d = `M ${start.x} ${start.y} Q ${cxp} ${cyp} ${end.x} ${end.y}`
 
           return (
-            <g key={o.id} opacity={o.settled ? 0.35 : 1}>
+            <g key={o.id} opacity={o.settled ? 0.3 : 1}>
+              {/* soft underlay glow on the active loop */}
+              {active && (
+                <path
+                  d={d}
+                  strokeWidth={7}
+                  strokeLinecap="round"
+                  style={{ fill: "none", stroke: "var(--primary-glow)" }}
+                />
+              )}
               <path
-                d={`M ${start.x} ${start.y} Q ${cxp} ${cyp} ${end.x} ${end.y}`}
-                strokeWidth={inCycle ? 3 : visible ? 2 : 1.25}
-                strokeDasharray={visible ? undefined : "3 4"}
+                className={active ? "cl-march" : undefined}
+                d={d}
+                strokeWidth={active ? 2.5 : visible ? 2 : 1.25}
+                strokeDasharray={active ? undefined : visible ? undefined : "3 4"}
                 markerEnd={marker}
                 strokeLinecap="round"
                 style={{ fill: "none", stroke }}
@@ -97,8 +146,13 @@ export function ObligationGraph({ obligations, role, highlightIds = [] }: Props)
                   dominantBaseline="middle"
                   className="font-mono"
                   fontSize="11"
+                  fontWeight={active ? 600 : 400}
                   style={{
-                    fill: o.settled ? "var(--muted-foreground)" : "var(--foreground)",
+                    fill: o.settled
+                      ? "var(--muted-foreground)"
+                      : active
+                        ? "var(--signal)"
+                        : "var(--foreground)",
                     textDecoration: o.settled ? "line-through" : "none",
                   }}
                 >
@@ -115,14 +169,26 @@ export function ObligationGraph({ obligations, role, highlightIds = [] }: Props)
           const isMe = me === c.address
           return (
             <g key={c.address}>
+              {isMe && (
+                <circle
+                  className="cl-pulse-ring"
+                  cx={p.x}
+                  cy={p.y}
+                  r={NODE_R}
+                  fill="none"
+                  strokeWidth={1.5}
+                  style={{ stroke: "var(--signal)" }}
+                />
+              )}
               <circle
                 cx={p.x}
                 cy={p.y}
                 r={NODE_R}
                 strokeWidth={1.5}
+                filter={isMe ? "url(#cl-glow)" : undefined}
                 style={{
-                  fill: isMe ? "var(--primary)" : "var(--card)",
-                  stroke: isMe ? "var(--primary)" : "var(--border)",
+                  fill: isMe ? "var(--primary)" : "var(--elevated)",
+                  stroke: isMe ? "var(--signal)" : "var(--border)",
                 }}
               />
               <text
@@ -144,6 +210,9 @@ export function ObligationGraph({ obligations, role, highlightIds = [] }: Props)
       <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 font-mono text-[11px] text-muted-foreground">
         <span className="flex items-center gap-1.5">
           <span className="h-0.5 w-4 bg-primary" /> your obligation
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-0.5 w-4 bg-signal" /> netting in motion
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-0.5 w-4 border-t border-dashed border-muted-foreground" /> opaque commitment

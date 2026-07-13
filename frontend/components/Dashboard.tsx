@@ -3,8 +3,9 @@
 import { useState } from "react"
 import { useContract } from "@/hooks/useContract"
 import { findNettableCycle } from "@/lib/netting"
-import { companyName } from "@/lib/mock-data"
+import { companyName, COMPANIES } from "@/lib/mock-data"
 import { RoleSwitcher } from "@/components/RoleSwitcher"
+import { StatusRail } from "@/components/StatusRail"
 import { ObligationGraph } from "@/components/ObligationGraph"
 import { ObligationList } from "@/components/ObligationList"
 import { AuditTable } from "@/components/AuditTable"
@@ -70,7 +71,9 @@ export function Dashboard() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
+    <>
+      <StatusRail parties={COMPANIES.length} />
+      <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
       {/* Header */}
       <header className="mb-6 flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
@@ -218,6 +221,7 @@ export function Dashboard() {
       {openProposal !== null && (
         <NettingModal proposalId={openProposal} onClose={() => setOpenProposal(null)} />
       )}
-    </div>
+      </div>
+    </>
   )
 }
