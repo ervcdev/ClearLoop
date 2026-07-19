@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useContract } from "@/hooks/useContract"
 import { companyName } from "@/lib/mock-data"
 import { shortHex, validateCycle } from "@/lib/netting"
@@ -17,10 +17,12 @@ export function NettingModal({
     useContract()
   const proposal = proposals.find((p) => p.id === proposalId)
   const [error, setError] = useState<string | null>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose()
     window.addEventListener("keydown", onKey)
+    panelRef.current?.focus()
     return () => window.removeEventListener("keydown", onKey)
   }, [onClose])
 
@@ -49,7 +51,9 @@ export function NettingModal({
       onClick={onClose}
     >
       <div
-        className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-lg border border-border bg-card shadow-xl sm:rounded-lg"
+        ref={panelRef}
+        tabIndex={-1}
+        className="cl-fade-up max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-lg border border-border bg-card shadow-xl outline-none sm:rounded-lg"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -126,13 +130,34 @@ export function NettingModal({
 
         {/* Signatures */}
         <div className="border-b border-border p-5">
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-2 flex items-center justify-between">
             <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
               EIP-712 approvals
             </span>
-            <span className="font-mono text-xs text-muted-foreground">
-              {proposal.approvals.length}/{proposal.participants.length}
+            <span className="font-mono text-xs">
+              <span className={allApproved ? "text-signal" : "text-foreground"}>
+                {proposal.approvals.length}
+              </span>
+              <span className="text-muted-foreground">/{proposal.participants.length}</span>
             </span>
+          </div>
+          {/* Segmented signature meter — the quorum filling in real time */}
+          <div className="mb-4 flex gap-1" aria-hidden>
+            {proposal.participants.map((addr, i) => {
+              const signed = proposal.approvals.some((a) => a.signer === addr)
+              return (
+                <span
+                  key={addr}
+                  className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${
+                    signed ? (allApproved ? "bg-signal" : "bg-primary") : "bg-border"
+                  }`}
+                  style={{
+                    boxShadow: signed && allApproved ? "0 0 8px var(--primary-glow)" : undefined,
+                    transitionDelay: `${i * 60}ms`,
+                  }}
+                />
+              )
+            })}
           </div>
           <ul className="flex flex-col gap-2">
             {proposal.participants.map((addr) => {
@@ -141,7 +166,9 @@ export function NettingModal({
                 <li key={addr} className="flex items-center gap-3 text-sm">
                   <span
                     className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
-                      approval ? "bg-settled text-settled-foreground" : "bg-muted text-muted-foreground"
+                      approval
+                        ? "cl-fade-up bg-settled text-settled-foreground"
+                        : "bg-muted text-muted-foreground"
                     }`}
                     aria-hidden
                   >
@@ -194,9 +221,16 @@ export function NettingModal({
                 type="button"
                 disabled={!allApproved}
                 onClick={() => act(() => executeProposal(proposal.id))}
-                className="w-full rounded-md border border-primary px-4 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/5 disabled:cursor-not-allowed disabled:border-border disabled:text-muted-foreground"
+                className={`w-full rounded-md px-4 py-2.5 text-sm font-medium transition-all ${
+                  allApproved
+                    ? "bg-primary text-primary-foreground hover:opacity-90"
+                    : "cursor-not-allowed border border-border text-muted-foreground"
+                }`}
+                style={allApproved ? { boxShadow: "0 0 0 1px var(--signal), 0 0 18px var(--primary-glow)" } : undefined}
               >
-                {allApproved ? "Execute atomic netting" : `Awaiting ${proposal.participants.length - proposal.approvals.length} signature(s)`}
+                {allApproved
+                  ? "Execute atomic netting"
+                  : `Awaiting ${proposal.participants.length - proposal.approvals.length} signature(s)`}
               </button>
 
               {iAmParticipant && (
@@ -209,11 +243,26 @@ export function NettingModal({
                 </button>
               )}
             </div>
+          ) : proposal.status === "Executed" ? (
+            <div
+              className="cl-fade-up flex items-center gap-3 rounded-md border border-settled/40 bg-settled/10 px-4 py-3"
+              style={{ boxShadow: "0 0 18px var(--primary-glow)" }}
+            >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-settled text-settled-foreground">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+              </span>
+              <div>
+                <p className="font-mono text-sm font-semibold text-settled">Extinguished atomically</p>
+                <p className="text-xs text-muted-foreground">
+                  {proposal.totalAmount.toLocaleString()} notional netted · obligations marked settled
+                </p>
+              </div>
+            </div>
           ) : (
             <div className="rounded-md bg-muted px-3 py-2.5 text-center text-sm text-muted-foreground">
-              {proposal.status === "Executed"
-                ? "Cycle extinguished atomically. Obligations marked settled."
-                : "Proposal rejected. Original obligations remain intact."}
+              Proposal rejected. Original obligations remain intact.
             </div>
           )}
         </div>
