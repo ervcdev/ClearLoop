@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# daml codegen output (regenerate with: dpm codegen-js)
+/src/generated/
+
+# test files
+/src/test-connection.*
